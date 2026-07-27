@@ -2,6 +2,7 @@ package com.ctrlwe.quaero.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -13,10 +14,15 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * (e.g. task executors, cache managers, event publishers) can be
  * registered here.</p>
  *
+ * <p>{@link EnableJpaAuditing} activates the automatic population of
+ * {@code @CreatedDate} and {@code @LastModifiedDate} fields on JPA
+ * entities that use {@code @EntityListeners(AuditingEntityListener.class)}.</p>
+ *
  * @author Quaero Engineering
  * @since 1.0
  */
 @Configuration
+@EnableJpaAuditing
 public class AppConfig {
 
     /**

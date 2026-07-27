@@ -5,24 +5,32 @@ import com.ctrlwe.quaero.auth.dto.LoginResponse;
 import com.ctrlwe.quaero.auth.dto.RefreshTokenRequest;
 import com.ctrlwe.quaero.auth.dto.RefreshTokenResponse;
 import com.ctrlwe.quaero.auth.dto.RegisterRequest;
-import com.ctrlwe.quaero.exception.BadRequestException;
 import com.ctrlwe.quaero.exception.ErrorCode;
 import com.ctrlwe.quaero.exception.UnauthorizedException;
 import com.ctrlwe.quaero.security.jwt.JwtService;
+import com.ctrlwe.quaero.user.AccountStatus;
+import com.ctrlwe.quaero.user.Role;
+import com.ctrlwe.quaero.user.User;
+import com.ctrlwe.quaero.user.UserAlreadyExistsException;
+import com.ctrlwe.quaero.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Default implementation of {@link AuthService}.
  *
- * <p>Uses the {@link JwtService} facade for all token operations.
- * In its current <strong>foundation</strong> state, user look-up and
- * credential verification are <em>placeholder</em> implementations;
- * these will be completed once the User entity and repository layers
- * are available.</p>
+ * <p>Uses the {@link UserRepository} for credential verification and
+ * user persistence, {@link PasswordEncoder} for secure password
+ * hashing and comparison, and {@link JwtService} for all token
+ * operations.</p>
  *
- * <p>No database access is performed by this class.</p>
+ * <p>Login authenticates an existing user by email and password.
+ * Registration creates a new user after validating uniqueness of
+ * both email and username. Both operations return a pair of JWT
+ * tokens (access + refresh) upon success.</p>
  *
  * @author Quaero Engineering
  * @since 1.0
@@ -35,29 +43,38 @@ public class AuthServiceImpl implements AuthService {
     private final JwtService jwtService;
     private final AuthMapper authMapper;
     private final AuthValidator authValidator;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     /**
      * {@inheritDoc}
      *
-     * <p><strong>Placeholder:</strong> currently generates tokens for
-     * the supplied email without verifying credentials against a
-     * persistent store. Replace the TODO section with real
-     * authentication once the User entity is available.</p>
+     * <p>Looks up the user by email from the {@link UserRepository}.
+     * If no user is found, or if the supplied password does not match
+     * the stored hash, an {@link UnauthorizedException} is thrown.
+     * On success, generates access and refresh tokens keyed to the
+     * user's username.</p>
      */
     @Override
+    @Transactional(readOnly = true)
     public LoginResponse login(LoginRequest request) {
         authValidator.validateLoginRequest(request);
 
-        // TODO: Look up the user by email from the UserRepository.
-        // TODO: Verify the password using PasswordEncoder.matches().
-        // TODO: Throw UnauthorizedException if credentials are invalid.
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new UnauthorizedException(
+                        "Invalid email or password",
+                        ErrorCode.UNAUTHORIZED));
 
-        String username = request.getEmail();
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new UnauthorizedException(
+                    "Invalid email or password",
+                    ErrorCode.UNAUTHORIZED);
+        }
 
-        String accessToken = jwtService.generateAccessToken(username);
-        String refreshToken = jwtService.generateRefreshToken(username);
+        String accessToken = jwtService.generateAccessToken(user.getUsername());
+        String refreshToken = jwtService.generateRefreshToken(user.getUsername());
 
-        log.info("Login successful for user: {}", username);
+        log.info("Login successful for user: {}", user.getUsername());
 
         return authMapper.toLoginResponse(accessToken, refreshToken);
     }
@@ -65,25 +82,44 @@ public class AuthServiceImpl implements AuthService {
     /**
      * {@inheritDoc}
      *
-     * <p><strong>Placeholder:</strong> currently generates tokens for
-     * the supplied email without persisting a new user. Replace the
-     * TODO section with real registration logic once the User entity
-     * is available.</p>
+     * <p>Validates that neither the email nor the username is already
+     * taken. Encodes the password with {@link PasswordEncoder}, builds
+     * a new {@link User} entity with {@link Role#USER},
+     * {@link AccountStatus#ACTIVE}, and a reputation score of zero,
+     * then persists it via {@link UserRepository}. On success,
+     * generates access and refresh tokens keyed to the new user's
+     * username.</p>
      */
     @Override
+    @Transactional
     public LoginResponse register(RegisterRequest request) {
         authValidator.validateRegisterRequest(request);
 
-        // TODO: Check for duplicate email/username via UserRepository.
-        // TODO: Encode the password using PasswordEncoder.encode().
-        // TODO: Persist the new User entity.
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new UserAlreadyExistsException(
+                    "A user with email '" + request.getEmail() + "' already exists");
+        }
 
-        String username = request.getEmail();
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new UserAlreadyExistsException(
+                    "A user with username '" + request.getUsername() + "' already exists");
+        }
 
-        String accessToken = jwtService.generateAccessToken(username);
-        String refreshToken = jwtService.generateRefreshToken(username);
+        User user = User.builder()
+                .username(request.getUsername())
+                .email(request.getEmail())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .role(Role.USER)
+                .accountStatus(AccountStatus.ACTIVE)
+                .reputationScore(0)
+                .build();
 
-        log.info("Registration successful for user: {}", username);
+        userRepository.save(user);
+
+        String accessToken = jwtService.generateAccessToken(user.getUsername());
+        String refreshToken = jwtService.generateRefreshToken(user.getUsername());
+
+        log.info("Registration successful for user: {}", user.getUsername());
 
         return authMapper.toLoginResponse(accessToken, refreshToken);
     }
@@ -114,3 +150,4 @@ public class AuthServiceImpl implements AuthService {
         return authMapper.toRefreshTokenResponse(newAccessToken, token);
     }
 }
+
