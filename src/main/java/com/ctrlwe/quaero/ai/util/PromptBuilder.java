@@ -1,82 +1,116 @@
 package com.ctrlwe.quaero.ai.util;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+
 /**
- * Centralised utility for constructing AI prompt strings.
+ * Centralised utility for constructing AI prompt strings by loading
+ * templates from classpath resource files.
  *
- * <p>All prompt templates used by the Quaero AI subsystem are defined
- * here, providing a single location for prompt management, review, and
- * iteration. This keeps business-level prompt engineering out of the
- * service layer.</p>
+ * <p>All prompt templates are stored under
+ * {@code src/main/resources/prompts/} and loaded once at class
+ * initialisation. This separates prompt engineering from Java code
+ * and makes iterating on prompts possible without recompilation.</p>
  *
- * <p>Methods in this class are pure functions – they accept raw input
+ * <p>Methods in this class are pure functions — they accept raw input
  * and return a fully-formed prompt string. No Spring dependencies or
  * side effects are involved.</p>
+ *
+ * <p>Templates use {@code %s} placeholders filled via
+ * {@link String#formatted(Object...)}.</p>
  *
  * @author Quaero Engineering
  * @since 1.0
  */
 public final class PromptBuilder {
 
-    /** Private constructor to prevent instantiation. */
+    // ------------------------------------------------------------------
+    // Template loading — done once at class init, fail-fast on error
+    // ------------------------------------------------------------------
+
+    private static final String MENTOR_TEMPLATE;
+    private static final String EVALUATION_TEMPLATE;
+
+    static {
+        MENTOR_TEMPLATE     = loadTemplate("/prompts/mentor-prompt.txt");
+        EVALUATION_TEMPLATE = loadTemplate("/prompts/evaluation-prompt.txt");
+    }
+
     private PromptBuilder() {
         // Utility class — do not instantiate.
     }
 
+    // ------------------------------------------------------------------
+    // Public API
+    // ------------------------------------------------------------------
+
     /**
-     * Builds a Socratic-method prompt that instructs the AI to guide the
-     * user toward an answer through targeted questions rather than giving
-     * a direct answer.
+     * Builds the Socratic mentor prompt by embedding the assembled
+     * context-and-conversation block into the mentor template.
      *
-     * @param userPrompt the original user question or statement
+     * <p>The template instructs the model to guide the user through
+     * Socratic questioning and explicitly prohibits stating any verdict,
+     * even under adversarial pressure.</p>
+     *
+     * @param contextEnrichedInput the assembled string containing the
+     *        case claim, guidance hints, and conversation history —
+     *        produced by {@code InvestigationServiceImpl.buildContextEnrichedInput()}
      * @return the fully-formed Socratic prompt string
      */
-    public static String buildSocraticPrompt(String userPrompt) {
-        return """
-                You are a Socratic tutor. Instead of giving a direct answer, \
-                guide the user toward understanding by asking thoughtful, \
-                probing questions. Keep your questions concise and focused.
-
-                User's input:
-                %s"""
-                .formatted(userPrompt);
+    public static String buildSocraticPrompt(String contextEnrichedInput) {
+        return MENTOR_TEMPLATE.formatted(contextEnrichedInput);
     }
 
     /**
-     * Builds a prompt that instructs the AI to produce a concise,
-     * structured summary of the provided evidence text.
+     * Builds the grading evaluation prompt by embedding the user's
+     * rationale, evidence links, and case context into the evaluation
+     * template.
      *
-     * @param evidenceText the raw evidence content to summarise
-     * @return the fully-formed evidence-summarisation prompt string
+     * <p>The template instructs the model to score the submission on
+     * five rubric dimensions (Reasoning Structure 35%, Evidence Usage 30%,
+     * Critical Thinking 20%, Objectivity 10%, Verdict Alignment 5%) and
+     * return the result in {@code SCORE: [n]\n[feedback]} format.</p>
+     *
+     * @param rationale     the user's written reasoning
+     * @param evidenceLinks list of URLs or source references cited
+     * @param caseContext   the internal case context string (claim +
+     *                      ground truth) from {@code CaseService.getFullContext()}
+     * @return the fully-formed grading prompt string
      */
-    public static String buildEvidenceSummaryPrompt(String evidenceText) {
-        return """
-                Summarise the following evidence concisely. Highlight the key \
-                facts, identify any inconsistencies, and note the overall \
-                reliability of the information.
+    public static String buildGradingPrompt(String rationale,
+                                            List<String> evidenceLinks,
+                                            String caseContext) {
+        String evidenceFormatted = evidenceLinks == null || evidenceLinks.isEmpty()
+                ? "(none provided)"
+                : String.join("\n", evidenceLinks);
 
-                Evidence:
-                %s"""
-                .formatted(evidenceText);
+        return EVALUATION_TEMPLATE.formatted(caseContext, rationale, evidenceFormatted);
     }
 
+    // ------------------------------------------------------------------
+    // Internal helpers
+    // ------------------------------------------------------------------
+
     /**
-     * Builds a prompt that instructs the AI to classify a claim into one
-     * of several predefined categories.
+     * Loads a classpath resource as a UTF-8 string.
      *
-     * @param claimText the claim to classify
-     * @return the fully-formed claim-classification prompt string
+     * @param resourcePath the classpath-relative path (e.g.
+     *                     {@code "/prompts/mentor-prompt.txt"})
+     * @return the full file content as a string
+     * @throws ExceptionInInitializerError if the resource is missing
+     *         or cannot be read — this is intentional fail-fast behaviour
      */
-    public static String buildClaimClassificationPrompt(String claimText) {
-        return """
-                Classify the following claim into exactly one of these \
-                categories: VERIFIED, UNVERIFIED, MISLEADING, FALSE, \
-                PARTIALLY_TRUE, or INSUFFICIENT_EVIDENCE.
-
-                Respond with the category followed by a brief justification \
-                (one to two sentences).
-
-                Claim:
-                %s"""
-                .formatted(claimText);
+    private static String loadTemplate(String resourcePath) {
+        try (InputStream is = PromptBuilder.class.getResourceAsStream(resourcePath)) {
+            if (is == null) {
+                throw new IOException("Prompt template not found on classpath: " + resourcePath);
+            }
+            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            throw new ExceptionInInitializerError(
+                    "Failed to load AI prompt template [" + resourcePath + "]: " + ex.getMessage());
+        }
     }
 }

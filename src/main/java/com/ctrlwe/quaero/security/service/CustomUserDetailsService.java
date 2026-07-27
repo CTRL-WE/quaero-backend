@@ -20,12 +20,11 @@ import org.springframework.transaction.annotation.Transactional;
  * {@link CustomUserPrincipal}.</p>
  *
  * <p>The {@link #loadUserByUsername(String)} method looks up the user
- * by <strong>email</strong> (the primary credential identifier used
- * during login) via {@link UserRepository#findByEmail(String)}.
- * Despite the method name imposed by the {@link UserDetailsService}
- * contract, the {@code username} parameter is treated as an email
- * address to match the login flow in
- * {@link com.ctrlwe.quaero.auth.AuthServiceImpl}.</p>
+ * by <strong>username</strong> (the value stored as the JWT {@code sub}
+ * claim) via {@link UserRepository#findByUsername(String)}.
+ * Login uses email as the credential identifier in
+ * {@link com.ctrlwe.quaero.auth.AuthServiceImpl}, but the token subject
+ * is set to the username, so this service must query by username.</p>
  *
  * <p>This service is registered as a Spring bean and can be
  * auto-detected by Spring Security or injected into the
@@ -69,11 +68,11 @@ public class CustomUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         log.debug("loadUserByUsername called with: {}", username);
 
-        User user = userRepository.findByEmail(username)
+        User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> {
-                    log.warn("User not found with email: {}", username);
+                    log.warn("User not found with username: {}", username);
                     return new UsernameNotFoundException(
-                            "User not found with email: " + username);
+                            "User not found with username: " + username);
                 });
 
         log.debug("User loaded successfully: id={}, username={}", user.getId(), user.getUsername());

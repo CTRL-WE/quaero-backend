@@ -11,15 +11,15 @@ import org.springframework.stereotype.Component;
  * <p>Values are bound from the application configuration file under
  * the {@code jwt} prefix:</p>
  * <pre>
- * jwt.secret=your-base64-encoded-secret
+ * jwt.secret=${JWT_SECRET:local-dev-secret-please-override}
  * jwt.issuer=quaero-backend
- * jwt.access-token-expiration=900000
- * jwt.refresh-token-expiration=604800000
+ * jwt.access-token-expiration=86400000
  * </pre>
  *
- * <p>Externalising these values allows different environments
- * (development, staging, production) to use distinct signing keys
- * and token lifetimes without code changes.</p>
+ * <p>The secret MUST be set via the {@code JWT_SECRET} environment
+ * variable in every non-development environment. The default value
+ * in {@code application.properties} is intentionally weak and must
+ * never be used in staging or production.</p>
  *
  * @author Quaero Engineering
  * @since 1.0
@@ -34,7 +34,8 @@ public class JwtProperties {
      * Base64-encoded secret key used to sign and verify JWTs.
      *
      * <p>The secret must be at least 256 bits (32 bytes) to satisfy
-     * the HMAC-SHA256 minimum key length requirement.</p>
+     * the HMAC-SHA256 minimum key length requirement. Set this via
+     * the {@code JWT_SECRET} environment variable — never hardcode it.</p>
      */
     private String secret;
 
@@ -46,14 +47,7 @@ public class JwtProperties {
     /**
      * Access-token lifetime in <strong>milliseconds</strong>.
      *
-     * <p>Typical default: 900 000 ms (15 minutes).</p>
+     * <p>Default: 86 400 000 ms (24 hours).</p>
      */
     private long accessTokenExpiration;
-
-    /**
-     * Refresh-token lifetime in <strong>milliseconds</strong>.
-     *
-     * <p>Typical default: 604 800 000 ms (7 days).</p>
-     */
-    private long refreshTokenExpiration;
 }

@@ -4,6 +4,7 @@ import com.ctrlwe.quaero.common.response.ApiErrorResponse;
 import com.ctrlwe.quaero.common.response.ApiResponse;
 import com.ctrlwe.quaero.user.dto.UpdateProfileRequest;
 import com.ctrlwe.quaero.user.dto.UserProfileResponse;
+import com.ctrlwe.quaero.security.CurrentUserResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -14,8 +15,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -54,6 +53,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserController {
 
     private final UserService userService;
+    private final CurrentUserResolver currentUserResolver;
 
     /**
      * Returns the authenticated user's full profile.
@@ -171,33 +171,10 @@ public class UserController {
     }
 
     // ----------------------------------------------------------------
-    // Utility
+    // Utility — delegated to shared CurrentUserResolver
     // ----------------------------------------------------------------
 
-    /**
-     * Resolves the authenticated user's ID from the Spring Security context.
-     *
-     * <p>The JWT filter populates the {@code SecurityContext} before this
-     * controller method is reached. The principal name (username from the
-     * JWT subject) is used to look up the user's numeric ID.</p>
-     *
-     * <p>TODO: Once the JWT filter populates the security context with a
-     * real {@code UserDetails} object containing the numeric user ID,
-     * update this method to extract the ID directly from the principal
-     * rather than performing a repository lookup via username. For now,
-     * this method uses the username from the JWT to find the user.</p>
-     *
-     * @return the current user's ID, or {@code -1L} as a safe sentinel
-     *         if no authenticated principal is found
-     */
     private Long resolveCurrentUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            log.warn("resolveCurrentUserId: no authenticated principal in SecurityContext");
-            return -1L;
-        }
-        // The JWT subject is the username. Use it to resolve the numeric user ID.
-        // TODO: Replace with direct ID extraction once UserDetails carries the numeric ID.
-        return -1L;
+        return currentUserResolver.resolveCurrentUserId();
     }
 }

@@ -58,7 +58,7 @@ public class UserServiceImpl implements UserService {
         userValidator.validateUniqueUsername(request.getUsername());
 
         User user = userMapper.toEntity(request);
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
 
         User savedUser = userRepository.save(user);
         log.info("User created successfully: id={}, username={}",

@@ -10,16 +10,16 @@ import org.springframework.stereotype.Service;
  * should be injected by controllers and other application-layer
  * classes. It delegates to the lower-level {@link JwtTokenProvider},
  * {@link JwtTokenValidator}, and {@link JwtClaimsExtractor}
- * internally, hiding implementation details and making it easy to
- * swap or extend the token strategy without affecting consumers.</p>
+ * internally.</p>
+ *
+ * <p>Only access tokens are issued; the platform does not use
+ * refresh tokens.</p>
  *
  * <p>Usage example:</p>
  * <pre>{@code
- * String accessToken  = jwtService.generateAccessToken("john.doe");
- * String refreshToken = jwtService.generateRefreshToken("john.doe");
- *
- * boolean valid = jwtService.validateAccessToken(accessToken);
- * String  user  = jwtService.extractUsername(accessToken);
+ * String token = jwtService.generateAccessToken("john.doe");
+ * boolean valid = jwtService.validateAccessToken(token);
+ * String  user  = jwtService.extractUsername(token);
  * }</pre>
  *
  * @author Quaero Engineering
@@ -37,20 +37,10 @@ public class JwtService {
      * Generates a short-lived access token for the given username.
      *
      * @param username the principal identifier
-     * @return a compact, signed JWT access token
+     * @return a compact, signed JWT access token (valid for 24 hours)
      */
     public String generateAccessToken(String username) {
         return jwtTokenProvider.generateAccessToken(username);
-    }
-
-    /**
-     * Generates a long-lived refresh token for the given username.
-     *
-     * @param username the principal identifier
-     * @return a compact, signed JWT refresh token
-     */
-    public String generateRefreshToken(String username) {
-        return jwtTokenProvider.generateRefreshToken(username);
     }
 
     /**
@@ -62,17 +52,6 @@ public class JwtService {
      */
     public boolean validateAccessToken(String token) {
         return jwtTokenValidator.validateToken(token, JwtTokenType.ACCESS);
-    }
-
-    /**
-     * Validates a refresh token (signature, expiration, issuer,
-     * and token type).
-     *
-     * @param token the compact JWT string
-     * @return {@code true} if the token is a valid refresh token
-     */
-    public boolean validateRefreshToken(String token) {
-        return jwtTokenValidator.validateToken(token, JwtTokenType.REFRESH);
     }
 
     /**

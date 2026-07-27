@@ -1,19 +1,13 @@
 package com.ctrlwe.quaero.submission.entity;
 
-import com.ctrlwe.quaero.casemodule.entity.Case;
-import com.ctrlwe.quaero.user.User;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -28,12 +22,19 @@ import java.time.LocalDateTime;
 
 /**
  * JPA entity representing a user's evidence submission for a particular
- * {@link Case} on the Quaero platform.
+ * case on the Quaero platform.
  *
  * <p>A submission captures the user's reasoning, source references,
- * and confidence level when evaluating a claim. Each submission is
- * linked to exactly one {@link Case} and one {@link User} via lazy
- * {@code @ManyToOne} relationships.</p>
+ * and confidence level when evaluating a claim.</p>
+ *
+ * <h3>Cross-module boundary rule</h3>
+ * <p>This entity belongs exclusively to the {@code submission} module.
+ * It must NOT hold {@code @ManyToOne} associations to entities owned
+ * by other modules (e.g. {@code Case} from {@code casemodule}, or
+ * {@code User} from {@code user}). Instead, foreign keys are stored
+ * as plain {@code Long} columns ({@link #caseId}, {@link #userId}).
+ * Cross-module queries must go through the owning module's service
+ * interface — never via JPA joins across module boundaries.</p>
  *
  * <p>Lifecycle: submissions are created in {@link SubmissionStatus#PENDING}
  * state and transition to {@link SubmissionStatus#VERIFIED} or
@@ -64,20 +65,24 @@ public class Submission {
     private Long id;
 
     /**
-     * The case this submission is associated with.
-     * Loaded lazily to avoid unnecessary joins on simple queries.
+     * Foreign key to the {@code cases} table.
+     *
+     * <p>Stored as a plain {@code Long} — no {@code @ManyToOne} association
+     * to {@code Case}. To load case data, use {@code CaseService.getFullContext()}
+     * or {@code CaseService.getBrief()} via the case module's service interface.</p>
      */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "case_id", nullable = false)
-    private Case caseEntity;
+    @Column(name = "case_id", nullable = false)
+    private Long caseId;
 
     /**
-     * The user who created this submission.
-     * Loaded lazily to avoid unnecessary joins on simple queries.
+     * Foreign key to the {@code users} table.
+     *
+     * <p>Stored as a plain {@code Long} — no {@code @ManyToOne} association
+     * to {@code User}. To load user data, use {@code UserService.getProfile()}
+     * via the user module's service interface.</p>
      */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
 
     /**
      * A concise title summarising the submission's claim or argument.

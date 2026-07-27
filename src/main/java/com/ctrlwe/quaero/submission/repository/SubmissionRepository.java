@@ -27,7 +27,7 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
      * @param caseId the ID of the case to filter by
      * @return an ordered list of submissions for the specified case
      */
-    List<Submission> findAllByCaseEntityIdOrderByCreatedAtDesc(Long caseId);
+    List<Submission> findAllByCaseIdOrderByCreatedAtDesc(Long caseId);
 
     /**
      * Retrieves all submissions by the given user, ordered by
