@@ -99,10 +99,14 @@ public class JwtClaimsExtractor {
     /**
      * Derives the HMAC-SHA signing key from the configured secret.
      *
+     * <p>Uses the raw UTF-8 bytes of the secret string — the same
+     * approach used by {@link JwtTokenProvider#getSigningKey()} to
+     * ensure sign and verify operations use an identical key.</p>
+     *
      * @return the {@link SecretKey} used for signature verification
      */
     private SecretKey getSigningKey() {
-        byte[] keyBytes = java.util.Base64.getDecoder().decode(jwtProperties.getSecret());
-        return io.jsonwebtoken.security.Keys.hmacShaKeyFor(keyBytes);
+        return io.jsonwebtoken.security.Keys.hmacShaKeyFor(
+                jwtProperties.getSecret().getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 }

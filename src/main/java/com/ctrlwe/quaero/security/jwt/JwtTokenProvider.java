@@ -1,31 +1,30 @@
 package com.ctrlwe.quaero.security.jwt;
 
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
-import java.util.Base64;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.Map;
 
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+
 /**
- * Responsible for generating signed JWT tokens for the Quaero platform.
+ * Responsible for generating signed JWT access tokens for the Quaero platform.
  *
  * <p>This class handles the low-level token construction using the
- * JJWT library. It supports both <strong>access</strong> and
- * <strong>refresh</strong> tokens, each with their own expiration
- * window as defined in {@link JwtProperties}.</p>
+ * JJWT library. Only <strong>access</strong> tokens are generated;
+ * refresh tokens are not part of the platform's authentication model.</p>
  *
- * <p>The generated tokens embed the following standard and custom
- * claims:</p>
+ * <p>The generated token embeds the following claims:</p>
  * <ul>
  *   <li>{@code sub} – the username / principal identifier</li>
  *   <li>{@code iss} – the configured issuer</li>
  *   <li>{@code iat} – issued-at timestamp</li>
- *   <li>{@code exp} – expiration timestamp</li>
- *   <li>{@code type} – custom claim indicating {@link JwtTokenType}</li>
+ *   <li>{@code exp} – expiration timestamp (24 hours)</li>
+ *   <li>{@code type} – custom claim set to {@link JwtTokenType#ACCESS}</li>
  * </ul>
  *
  * @author Quaero Engineering
@@ -41,22 +40,11 @@ public class JwtTokenProvider {
      * Generates a short-lived access token for the given username.
      *
      * @param username the subject to embed in the token
-     * @return a compact, signed JWT string
+     * @return a compact, signed JWT string (valid for 24 hours)
      */
     public String generateAccessToken(String username) {
         return buildToken(username, JwtTokenType.ACCESS,
                 jwtProperties.getAccessTokenExpiration());
-    }
-
-    /**
-     * Generates a long-lived refresh token for the given username.
-     *
-     * @param username the subject to embed in the token
-     * @return a compact, signed JWT string
-     */
-    public String generateRefreshToken(String username) {
-        return buildToken(username, JwtTokenType.REFRESH,
-                jwtProperties.getRefreshTokenExpiration());
     }
 
     // ------------------------------------------------------------------
@@ -94,7 +82,7 @@ public class JwtTokenProvider {
      * @return the {@link SecretKey} used for token signing
      */
     private SecretKey getSigningKey() {
-        byte[] keyBytes = Base64.getDecoder().decode(jwtProperties.getSecret());
-        return Keys.hmacShaKeyFor(keyBytes);
+        return Keys.hmacShaKeyFor(
+                jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8));
     }
 }

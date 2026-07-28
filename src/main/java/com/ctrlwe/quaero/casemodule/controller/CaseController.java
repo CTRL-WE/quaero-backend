@@ -5,6 +5,7 @@ import com.ctrlwe.quaero.casemodule.dto.CaseFeedItem;
 import com.ctrlwe.quaero.casemodule.service.CaseService;
 import com.ctrlwe.quaero.common.response.ApiErrorResponse;
 import com.ctrlwe.quaero.common.response.ApiResponse;
+import com.ctrlwe.quaero.security.CurrentUserResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -15,8 +16,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,23 +28,13 @@ import java.util.List;
  *
  * <p>Exposes exactly two public endpoints:</p>
  * <ul>
- *   <li>{@code GET /api/cases} — the investigation feed (all published cases)</li>
- *   <li>{@code GET /api/cases/{id}/brief} — the full brief for a single case</li>
+ *   <li>{@code GET /api/cases} — returns all published cases as a feed.</li>
+ *   <li>{@code GET /api/cases/{id}/brief} — returns the public brief for
+ *       a single published case.</li>
  * </ul>
  *
- * <p>Both endpoints require a valid JWT in the {@code Authorization: Bearer <token>}
- * header. Authentication is enforced by the platform-wide
- * {@code SecurityConfig} ({@code anyRequest().authenticated()}) and the
- * {@code JwtAuthenticationFilter} — no security code lives in this controller.</p>
- *
- * <p><strong>No other endpoint exists or will be added here.</strong>
- * {@code CaseService#getFullContext(Long)} has no HTTP path and must
- * never be wired to any controller method.</p>
- *
- * <p>The {@code userId} passed to {@link CaseService#getFeed(Long)} is
- * resolved from the Spring Security context rather than accepted as a
- * request parameter, so that a user can never request feed data for a
- * different user's completion state.</p>
+ * <p>Both endpoints require a valid JWT. No internal case data
+ * (ground truth, evaluation hints, etc.) is ever returned.</p>
  *
  * @author Quaero Engineering
  * @since 1.0
@@ -59,6 +48,7 @@ import java.util.List;
 public class CaseController {
 
     private final CaseService caseService;
+    private final CurrentUserResolver currentUserResolver;
 
     /**
      * Returns all published cases as a feed of {@link CaseFeedItem} objects.
@@ -158,41 +148,10 @@ public class CaseController {
     }
 
     // ----------------------------------------------------------------
-    // Utility
+    // Utility — delegated to shared CurrentUserResolver
     // ----------------------------------------------------------------
 
-    /**
-     * Resolves the authenticated user's ID from the Spring Security context.
-     *
-     * <p>The JWT filter populates the {@code SecurityContext} before this
-     * controller method is reached. The principal name is used as the user
-     * identifier until the User/Profile module provides a lookup mechanism.</p>
-     *
-     * <p>If the security context holds no authentication (which should be
-     * impossible given the {@code anyRequest().authenticated()} rule in
-     * {@code SecurityConfig}), a sentinel value of {@code -1L} is returned
-     * so that the service can still function without a NullPointerException.
-     * The {@code alreadyCompleted} stub will return {@code false} in that
-     * case regardless.</p>
-     *
-     * <p>TODO: Once the User/Profile module is available and the JWT filter
-     * populates the security context with a real {@code UserDetails} object,
-     * update this method to extract the numeric user ID from the principal
-     * rather than relying on the username string. The service signature
-     * already accepts {@code Long userId}, so no downstream change is needed.</p>
-     *
-     * @return the current user's ID, or {@code -1L} as a safe sentinel
-     */
     private Long resolveCurrentUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            log.warn("resolveCurrentUserId: no authenticated principal in SecurityContext");
-            return -1L;
-        }
-        // TODO: Replace with UserService#findByUsername(principal.getName()).getId()
-        //       once the User/Profile module exposes that lookup through its service
-        //       interface. Until then, return -1L as a safe sentinel; the
-        //       alreadyCompleted field will remain false regardless.
-        return -1L;
+        return currentUserResolver.resolveCurrentUserId();
     }
 }

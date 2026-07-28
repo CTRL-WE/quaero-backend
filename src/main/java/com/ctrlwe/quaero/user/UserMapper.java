@@ -85,7 +85,7 @@ public class UserMapper {
         return User.builder()
                 .username(request.getUsername())
                 .email(request.getEmail())
-                .password(request.getPassword())
+                .passwordHash(request.getPassword())
                 .fullName(request.getFullName())
                 .build();
     }

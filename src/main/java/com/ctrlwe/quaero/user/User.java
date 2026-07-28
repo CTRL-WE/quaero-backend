@@ -78,9 +78,10 @@ public class User {
 
     /**
      * BCrypt-hashed password. Never returned in any API response.
+     * Stored under the column {@code password_hash}.
      */
-    @Column(nullable = false)
-    private String password;
+    @Column(name = "password_hash", nullable = false)
+    private String passwordHash;
 
     /**
      * User's full display name (optional profile field).
