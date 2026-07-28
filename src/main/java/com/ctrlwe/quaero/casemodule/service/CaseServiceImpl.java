@@ -27,7 +27,7 @@ import java.util.List;
  * <p><strong>Teaser truncation rule:</strong> {@link #getFeed(Long)} truncates
  * {@code publicEvidenceSummary} to 150 characters and appends {@code "..."}
  * if the original text is longer. This produces a consistent card-size preview
- * on the Feed. The threshold is declared as a named constant
+ * on the Investigation Feed. The threshold is declared as a named constant
  * ({@link #TEASER_MAX_LENGTH}) so that it can be found and changed in one
  * place if the product team revises the design.</p>
  *
@@ -41,7 +41,7 @@ public class CaseServiceImpl implements CaseService {
 
     /**
      * Maximum number of characters retained in the evidence teaser shown
-     * on the Feed ({@link CaseFeedItem#getEvidenceTeaser()}).
+     * on the Investigation Feed ({@link CaseFeedItem#getEvidenceTeaser()}).
      * If {@code publicEvidenceSummary.length() > TEASER_MAX_LENGTH},
      * the text is cut at this boundary and {@code "..."} is appended.
      */
@@ -58,7 +58,8 @@ public class CaseServiceImpl implements CaseService {
      *
      * <p>Fetches all PUBLISHED cases from the repository, maps each one
      * to a {@link CaseFeedItem} via explicit field-by-field mapping, and
-     * returns the resulting list.</p>
+     * returns the resulting list. The Feed represents the Investigation
+     * Feed in the product — a scrollable list of Investigation Challenges.</p>
      *
      * <p>The {@code alreadyCompleted} flag is stubbed as {@code false} for
      * every case. See the TODO inside {@link #toFeedItem(Case, Long)} for the
@@ -82,8 +83,9 @@ public class CaseServiceImpl implements CaseService {
      *
      * <p>Looks up the case by ID and throws {@link CaseNotFoundException}
      * if it does not exist. Maps to {@link CaseBriefResponse} via explicit
-     * field-by-field mapping — only {@code id}, {@code claim}, and
-     * {@code publicEvidenceSummary} are copied.</p>
+     * field-by-field mapping — the Observe screen receives the full public
+     * shape plus all presentation metadata. No internal field is ever
+     * included.</p>
      */
     @Override
     @Transactional(readOnly = true)
@@ -97,7 +99,7 @@ public class CaseServiceImpl implements CaseService {
     }
 
     // ----------------------------------------------------------------
-    // Internal surface — no HTTP endpoint, called by future modules only
+    // Internal surface — no HTTP endpoint, called by other modules only
     // ----------------------------------------------------------------
 
     /**
@@ -108,9 +110,8 @@ public class CaseServiceImpl implements CaseService {
      * complete {@link CaseInternalContext} including all internal fields.</p>
      *
      * <p><strong>This method must never be called from any controller.</strong>
-     * It has no HTTP endpoint. It will be called by the Investigation and
-     * Submission &amp; Evaluation modules through this service interface
-     * once those modules are built.</p>
+     * It has no HTTP endpoint. It is called by the Investigation and
+     * Submission modules through this service interface.</p>
      */
     @Override
     @Transactional(readOnly = true)
@@ -130,9 +131,16 @@ public class CaseServiceImpl implements CaseService {
     /**
      * Maps a {@link Case} entity to a {@link CaseFeedItem}.
      *
-     * <p>Only {@code id}, {@code claim}, the truncated evidence teaser, and
-     * the stubbed {@code alreadyCompleted} flag are mapped. No internal field
-     * is referenced in this method.</p>
+     * <p>Maps: investigative content ({@code id}, {@code claim},
+     * truncated evidence teaser, {@code alreadyCompleted}) plus
+     * lightweight presentation metadata ({@code platform},
+     * {@code thumbnailUrl}, {@code mediaType},
+     * {@code verificationDifficulty}, engagement counts,
+     * {@code category}).</p>
+     *
+     * <p>Intentionally omits: {@code originalPoster}, {@code caption},
+     * {@code mediaUrl}, {@code publishedAt} — these are Observe-only
+     * fields per V1 Section 3.</p>
      *
      * @param c      the case entity
      * @param userId the requesting user's ID (for completion-status check)
@@ -140,11 +148,12 @@ public class CaseServiceImpl implements CaseService {
      */
     private CaseFeedItem toFeedItem(Case c, Long userId) {
         // TODO: Replace the alreadyCompleted stub with a real call to
-        //       SubmissionService#hasUserSubmitted(userId, c.getId()) once the
-        //       Submission module is built. Inject SubmissionService into this
-        //       class through its interface — never reach into SubmissionRepository
-        //       directly. The userId parameter is already threaded through from
-        //       the controller, so no signature change will be needed here.
+        //       SubmissionService. The Submission module now exists —
+        //       inject SubmissionService into this class through its
+        //       interface and check whether a submission exists for
+        //       (userId, c.getId()). Never reach into SubmissionRepository
+        //       directly. The userId parameter is already threaded through
+        //       from the controller, so no signature change will be needed.
         boolean alreadyCompleted = false;
 
         return CaseFeedItem.builder()
@@ -152,14 +161,27 @@ public class CaseServiceImpl implements CaseService {
                 .claim(c.getClaim())
                 .evidenceTeaser(buildTeaser(c.getPublicEvidenceSummary()))
                 .alreadyCompleted(alreadyCompleted)
+                // Presentation metadata (lightweight set for Feed card)
+                .platform(c.getPlatform())
+                .thumbnailUrl(c.getThumbnailUrl())
+                .mediaType(c.getMediaType())
+                .verificationDifficulty(c.getVerificationDifficulty())
+                .engagementLikes(c.getEngagementLikes())
+                .engagementComments(c.getEngagementComments())
+                .engagementShares(c.getEngagementShares())
+                .category(c.getCategory())
                 .build();
     }
 
     /**
      * Maps a {@link Case} entity to a {@link CaseBriefResponse}.
      *
-     * <p>Only {@code id}, {@code claim}, and {@code publicEvidenceSummary}
-     * are mapped. This method must never reference any internal-shape field.</p>
+     * <p>Maps: all public-shape fields ({@code id}, {@code claim},
+     * {@code publicEvidenceSummary}) plus the full presentation
+     * metadata set. This is the Observe screen — the user sees the
+     * complete "Original Post" here for the first time.</p>
+     *
+     * <p>This method must never reference any internal-shape field.</p>
      *
      * @param c the case entity
      * @return a populated {@link CaseBriefResponse}
@@ -169,6 +191,19 @@ public class CaseServiceImpl implements CaseService {
                 .id(c.getId())
                 .claim(c.getClaim())
                 .publicEvidenceSummary(c.getPublicEvidenceSummary())
+                // Full presentation metadata (Observe screen)
+                .platform(c.getPlatform())
+                .originalPoster(c.getOriginalPoster())
+                .caption(c.getCaption())
+                .thumbnailUrl(c.getThumbnailUrl())
+                .mediaUrl(c.getMediaUrl())
+                .mediaType(c.getMediaType())
+                .engagementLikes(c.getEngagementLikes())
+                .engagementComments(c.getEngagementComments())
+                .engagementShares(c.getEngagementShares())
+                .publishedAt(c.getPublishedAt())
+                .verificationDifficulty(c.getVerificationDifficulty())
+                .category(c.getCategory())
                 .build();
     }
 
@@ -178,6 +213,11 @@ public class CaseServiceImpl implements CaseService {
      * <p>All fields, including every internal-shape field, are copied here.
      * This method is the only place in the codebase where internal fields
      * cross the entity/DTO boundary for internal consumers.</p>
+     *
+     * <p><strong>Presentation metadata is intentionally excluded from
+     * {@link CaseInternalContext}.</strong> Engagement counts and media
+     * URLs have no business in an AI grading or Socratic-mentoring
+     * prompt.</p>
      *
      * @param c the case entity
      * @return a fully populated {@link CaseInternalContext}

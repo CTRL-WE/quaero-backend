@@ -8,6 +8,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -15,24 +17,32 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 /**
- * JPA entity representing a single investigable claim on the Quaero platform.
+ * JPA entity representing a single investigable claim — an
+ * <strong>Investigation Challenge</strong> — on the Quaero platform.
  *
- * <p><strong>Two-shape design — read this before touching anything.</strong>
- * Every {@code Case} carries two fundamentally different information shapes
- * simultaneously:</p>
+ * <p><strong>Three-shape design — read this before touching anything.</strong>
+ * Every {@code Case} carries three conceptually distinct information
+ * shapes simultaneously:</p>
  *
  * <ol>
  *   <li><strong>Public shape</strong> — {@link #claim} and
- *       {@link #publicEvidenceSummary} only. These are the only fields
- *       that may ever reach a user-facing HTTP response, before or during
- *       an investigation.</li>
+ *       {@link #publicEvidenceSummary}. These are the investigative
+ *       content fields visible to the user before and during an
+ *       investigation.</li>
+ *   <li><strong>Presentation metadata</strong> (V2 "Original Post") —
+ *       {@link #platform}, {@link #originalPoster}, {@link #caption},
+ *       {@link #thumbnailUrl}, {@link #mediaUrl}, {@link #mediaType},
+ *       engagement metrics, {@link #verificationDifficulty},
+ *       {@link #publishedAt}, and {@link #category}. These describe
+ *       <em>how</em> the claim appeared on social media and are safe
+ *       to expose in public responses ({@code CaseFeedItem},
+ *       {@code CaseBriefResponse}).</li>
  *   <li><strong>Internal shape</strong> — {@link #groundTruth},
  *       {@link #groundTruthExplanation}, {@link #trustedReferences},
- *       {@link #investigationHints}, and {@link #learningSummary}. These
- *       fields are consumed exclusively by the future Investigation and
- *       Submission &amp; Evaluation modules through
- *       {@code CaseService#getFullContext(Long)}. They must NEVER appear
- *       in any HTTP response. Not even structurally.</li>
+ *       {@link #investigationHints}, and {@link #learningSummary}.
+ *       Consumed exclusively by Investigation and Submission modules
+ *       through {@code CaseService#getFullContext(Long)}. Must NEVER
+ *       appear in any HTTP response.</li>
  * </ol>
  *
  * <p>This entity is never returned directly from any controller method.
@@ -57,7 +67,9 @@ import java.time.LocalDateTime;
 @Table(name = "cases")
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor
+@AllArgsConstructor
 public class Case {
 
     /**
@@ -72,19 +84,130 @@ public class Case {
     // ----------------------------------------------------------------
 
     /**
-     * The real-world claim this case asks the user to investigate.
-     * This is the primary visible text on the Feed card and the Brief screen.
+     * The real-world claim this Investigation Challenge asks the user
+     * to investigate. This is the primary visible text on the
+     * Investigation Feed card and the Observe screen.
      */
     @Column(nullable = false, columnDefinition = "TEXT")
     private String claim;
 
     /**
-     * A curated summary of publicly available evidence relevant to the claim.
-     * This is shown in full on the Brief screen ({@code CaseBriefResponse})
-     * and truncated to a teaser on the Feed ({@code CaseFeedItem}).
+     * A curated summary of publicly available evidence relevant to the
+     * claim. This is shown in full on the Observe screen
+     * ({@code CaseBriefResponse}) and truncated to a teaser on the
+     * Investigation Feed ({@code CaseFeedItem}).
      */
     @Column(nullable = false, columnDefinition = "TEXT")
     private String publicEvidenceSummary;
+
+    // ----------------------------------------------------------------
+    // PRESENTATION METADATA — the "Original Post" (V2 architecture)
+    //
+    // These fields describe HOW the claim appeared on social media.
+    // They are safe to expose in public API responses (Feed, Observe).
+    // All nullable — existing cases predate this metadata and continue
+    // to work without it.
+    // ----------------------------------------------------------------
+
+    /**
+     * The social media platform from which the original post originated.
+     * Drives platform-specific styling (logo, colour palette, layout)
+     * on the frontend.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private Platform platform;
+
+    /**
+     * The display name or handle of the original poster as it appeared
+     * in the social media post. This is presentation text, not a real
+     * Quaero user account — it may be fictitious or anonymised.
+     */
+    @Column(length = 255)
+    private String originalPoster;
+
+    /**
+     * The original social media post's caption or body text. Separate
+     * from {@link #claim}: the claim is the thing being investigated;
+     * the caption is the social framing around it — they may differ.
+     */
+    @Column(columnDefinition = "TEXT")
+    private String caption;
+
+    /**
+     * URL for the post's thumbnail or preview image, shown on the
+     * Investigation Feed card. Recommended to be self-hosted rather
+     * than hotlinked from the original platform.
+     */
+    @Column(length = 2048)
+    private String thumbnailUrl;
+
+    /**
+     * URL for the full-size media (image or video) shown on the
+     * Observe/Brief screen. Intentionally omitted from the Feed card
+     * to keep the feed lightweight.
+     */
+    @Column(length = 2048)
+    private String mediaUrl;
+
+    /**
+     * The type of media attached to the original post. Drives how the
+     * frontend renders the media on the Observe screen (image viewer,
+     * video player, text-only card, or screenshot frame).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private MediaType mediaType;
+
+    /**
+     * Display-only engagement count — likes on the original post.
+     * Static per Case (not live-updating). Defaults to 0.
+     */
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer engagementLikes = 0;
+
+    /**
+     * Display-only engagement count — comments on the original post.
+     * Static per Case (not live-updating). Defaults to 0.
+     */
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer engagementComments = 0;
+
+    /**
+     * Display-only engagement count — shares/retweets on the original
+     * post. Static per Case (not live-updating). Defaults to 0.
+     */
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer engagementShares = 0;
+
+    /**
+     * The original social media post's claimed publish date. Distinct
+     * from {@link #createdAt} (when the Case was added to QUAERO).
+     */
+    @Column
+    private LocalDateTime publishedAt;
+
+    /**
+     * Signals investigation difficulty on the Feed card. A natural
+     * future hook for difficulty-weighted XP in the Reputation module
+     * (V1 Section 9, V2 Section 7). Defaults to {@link VerificationDifficulty#MEDIUM}.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private VerificationDifficulty verificationDifficulty = VerificationDifficulty.MEDIUM;
+
+    /**
+     * Topical category of the claim. Reserved per V2 Section 5 for
+     * future filtering, analytics, and category-scoped leaderboards.
+     * No filtering or scoring logic is built on this field yet.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private Category category;
 
     // ----------------------------------------------------------------
     // INTERNAL SHAPE — server-side only, NEVER in any public response
@@ -115,7 +238,7 @@ public class Case {
     private String trustedReferences;
 
     /**
-     * Internal hints used by the future AI Mentor to guide Socratic
+     * Internal hints used by the AI Mentor to guide Socratic
      * questioning during an investigation session. Never exposed to users.
      */
     @Column(nullable = false, columnDefinition = "TEXT")
@@ -146,38 +269,4 @@ public class Case {
      */
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
-
-    /**
-     * Convenience constructor for seed-data / testing use.
-     * Sets {@link #createdAt} to the supplied timestamp.
-     *
-     * @param claim                   the investigable claim
-     * @param publicEvidenceSummary   public-facing evidence summary
-     * @param groundTruth             the verified conclusion (internal)
-     * @param groundTruthExplanation  explanation of the conclusion (internal)
-     * @param trustedReferences       newline-delimited references (internal)
-     * @param investigationHints      AI-Mentor hints (internal)
-     * @param learningSummary         post-submission learning text (internal)
-     * @param status                  the lifecycle status
-     * @param createdAt               creation timestamp
-     */
-    public Case(String claim,
-                String publicEvidenceSummary,
-                String groundTruth,
-                String groundTruthExplanation,
-                String trustedReferences,
-                String investigationHints,
-                String learningSummary,
-                CaseStatus status,
-                LocalDateTime createdAt) {
-        this.claim = claim;
-        this.publicEvidenceSummary = publicEvidenceSummary;
-        this.groundTruth = groundTruth;
-        this.groundTruthExplanation = groundTruthExplanation;
-        this.trustedReferences = trustedReferences;
-        this.investigationHints = investigationHints;
-        this.learningSummary = learningSummary;
-        this.status = status;
-        this.createdAt = createdAt;
-    }
 }

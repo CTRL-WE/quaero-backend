@@ -24,13 +24,16 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * REST controller for the Case module.
+ * REST controller for the Case module — the Investigation Feed and
+ * Observe endpoints.
  *
  * <p>Exposes exactly two public endpoints:</p>
  * <ul>
- *   <li>{@code GET /api/cases} — returns all published cases as a feed.</li>
- *   <li>{@code GET /api/cases/{id}/brief} — returns the public brief for
- *       a single published case.</li>
+ *   <li>{@code GET /api/cases} — returns the Investigation Feed:
+ *       all published Investigation Challenges as scrollable cards.</li>
+ *   <li>{@code GET /api/cases/{id}/brief} — returns the Observe
+ *       screen for a single Investigation Challenge: the full claim,
+ *       public evidence, and complete Original Post metadata.</li>
  * </ul>
  *
  * <p>Both endpoints require a valid JWT. No internal case data
@@ -43,7 +46,10 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/cases")
 @RequiredArgsConstructor
-@Tag(name = "Cases", description = "Investigation case feed and brief endpoints.")
+@Tag(name = "Investigation Feed",
+     description = "Investigation Challenge feed and Observe screen endpoints. " +
+                   "Each challenge presents a real-world claim as a social-media " +
+                   "post for users to investigate.")
 @SecurityRequirement(name = "bearerAuth")
 public class CaseController {
 
@@ -51,26 +57,32 @@ public class CaseController {
     private final CurrentUserResolver currentUserResolver;
 
     /**
-     * Returns all published cases as a feed of {@link CaseFeedItem} objects.
+     * Returns the Investigation Feed — all published Investigation
+     * Challenges as a list of {@link CaseFeedItem} cards.
      *
-     * <p>Each item contains a short evidence teaser (≤ 150 characters) and a
-     * per-user completion flag. Cases are ordered newest-first. Draft cases
+     * <p>Each card contains: the claim, an evidence teaser, platform
+     * metadata, engagement metrics, a difficulty badge, and a per-user
+     * completion flag. Cases are ordered newest-first. Draft cases
      * are never included.</p>
      *
      * @return HTTP 200 with the list of feed items (may be empty)
      */
     @GetMapping
     @Operation(
-        summary = "Get investigation feed",
-        description = "Returns all PUBLISHED cases as feed items. Each item includes " +
-                      "the case ID, claim, a 150-character evidence teaser, and a flag " +
-                      "indicating whether the authenticated user has already submitted " +
-                      "for that case. Draft cases are never included."
+        summary = "Get Investigation Feed",
+        description = "Returns all published Investigation Challenges as " +
+                      "scrollable feed cards. Each card includes the claim, " +
+                      "a 150-character evidence teaser, platform and media type, " +
+                      "engagement metrics (likes, comments, shares), a " +
+                      "verification difficulty badge, category tag, and a flag " +
+                      "indicating whether the authenticated user has already " +
+                      "submitted for that challenge. Draft cases are never " +
+                      "included. Ordered newest-first."
     )
     @ApiResponses(value = {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200",
-            description = "Feed returned successfully (may be an empty list).",
+            description = "Investigation Feed returned successfully (may be empty).",
             content = @Content(
                 mediaType = "application/json",
                 array = @ArraySchema(schema = @Schema(implementation = CaseFeedItem.class))
@@ -92,30 +104,38 @@ public class CaseController {
         List<CaseFeedItem> feed = caseService.getFeed(userId);
 
         return ResponseEntity.ok(
-                ApiResponse.success(feed, "Feed retrieved successfully"));
+                ApiResponse.success(feed, "Investigation Feed retrieved successfully"));
     }
 
     /**
-     * Returns the full public Brief for a single published case.
+     * Returns the Observe screen for a single Investigation Challenge.
      *
-     * <p>The brief contains only the case ID, claim, and the full
-     * public evidence summary. No internal field is present in the response.</p>
+     * <p>The Observe screen contains the full claim, untruncated public
+     * evidence summary, and the complete Original Post presentation
+     * metadata (platform, poster, caption, full-size media, engagement
+     * metrics, publish date, difficulty, category). No internal field
+     * is present in the response.</p>
      *
-     * @param id the case identifier from the URL path
-     * @return HTTP 200 with the brief, or HTTP 404 if the case does not exist
+     * @param id the Investigation Challenge identifier from the URL path
+     * @return HTTP 200 with the Observe data, or HTTP 404 if not found
      */
     @GetMapping("/{id}/brief")
     @Operation(
-        summary = "Get case brief",
-        description = "Returns the full public brief for a single PUBLISHED case: " +
-                      "the case ID, the claim, and the complete public evidence summary. " +
-                      "No internal content (ground truth, hints, etc.) is included. " +
-                      "Returns 404 if the case ID does not exist."
+        summary = "Get Investigation Challenge — Observe",
+        description = "Returns the full Observe screen for a single " +
+                      "Investigation Challenge. Includes the claim, the " +
+                      "complete public evidence summary, and the full " +
+                      "Original Post metadata: platform, poster handle, " +
+                      "caption, media (thumbnail + full-size URL), " +
+                      "engagement metrics, publish date, difficulty level, " +
+                      "and category. No internal content (ground truth, " +
+                      "hints, etc.) is included. Returns 404 if the " +
+                      "challenge ID does not exist."
     )
     @ApiResponses(value = {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200",
-            description = "Brief returned successfully.",
+            description = "Observe data returned successfully.",
             content = @Content(
                 mediaType = "application/json",
                 schema = @Schema(implementation = CaseBriefResponse.class)
@@ -131,7 +151,7 @@ public class CaseController {
         ),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "404",
-            description = "Case not found — no case with the supplied ID exists.",
+            description = "Investigation Challenge not found.",
             content = @Content(
                 mediaType = "application/json",
                 schema = @Schema(implementation = ApiErrorResponse.class)
@@ -144,7 +164,7 @@ public class CaseController {
         CaseBriefResponse brief = caseService.getBrief(id);
 
         return ResponseEntity.ok(
-                ApiResponse.success(brief, "Case brief retrieved successfully"));
+                ApiResponse.success(brief, "Investigation Challenge retrieved successfully"));
     }
 
     // ----------------------------------------------------------------

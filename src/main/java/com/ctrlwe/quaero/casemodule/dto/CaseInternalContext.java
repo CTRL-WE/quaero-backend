@@ -10,8 +10,8 @@ import java.time.LocalDateTime;
  * Internal-only projection of a {@link com.ctrlwe.quaero.casemodule.entity.Case}.
  *
  * <p><strong>THIS CLASS MUST NEVER BE RETURNED FROM ANY {@code @RestController}
- * METHOD.</strong> It is consumed exclusively by the future Investigation and
- * Submission &amp; Evaluation service modules through
+ * METHOD.</strong> It is consumed exclusively by the Investigation and
+ * Submission service modules through
  * {@code CaseService#getFullContext(Long)} — not through any HTTP endpoint.</p>
  *
  * <p>It deliberately carries <em>all</em> fields, including ground truth and

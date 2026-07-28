@@ -51,8 +51,9 @@ public interface CaseService {
     /**
      * Returns the full public Brief for a single published case.
      *
-     * <p>The brief contains only {@code id}, {@code claim}, and the
-     * <em>full</em> {@code publicEvidenceSummary}. No internal field
+     * <p>The brief contains {@code id}, {@code claim}, the
+     * <em>full</em> {@code publicEvidenceSummary}, and the complete
+     * presentation metadata ("Original Post") set. No internal field
      * may ever appear in the returned object.</p>
      *
      * @param caseId the case identifier
@@ -69,9 +70,9 @@ public interface CaseService {
      *
      * <p><strong>INTERNAL USE ONLY.</strong> This method must never be
      * called from any {@code @RestController}. It has no HTTP endpoint.
-     * It is intended exclusively for the future Investigation and
-     * Submission &amp; Evaluation modules, which will inject this
-     * {@code CaseService} interface and call this method through it.</p>
+     * It is consumed exclusively by the Investigation and
+     * Submission modules through this {@code CaseService}
+     * interface.</p>
      *
      * @param caseId the case identifier
      * @return the {@link CaseInternalContext} for the requested case
