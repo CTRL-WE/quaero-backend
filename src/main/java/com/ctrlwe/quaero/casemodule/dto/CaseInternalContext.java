@@ -1,6 +1,8 @@
 package com.ctrlwe.quaero.casemodule.dto;
 
+import com.ctrlwe.quaero.casemodule.entity.Category;
 import com.ctrlwe.quaero.casemodule.entity.CaseStatus;
+import com.ctrlwe.quaero.casemodule.entity.VerificationDifficulty;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -78,6 +80,24 @@ public class CaseInternalContext {
      * Never exposed pre-submission under any circumstance.
      */
     private final String learningSummary;
+
+    // ----------------------------------------------------------------
+    // Presentation metadata (subset — only what the AI Mentor needs)
+    // ----------------------------------------------------------------
+
+    /**
+     * Topical category of the claim — enables domain-specific Socratic
+     * guidance (e.g. health verification vs. geolocation techniques).
+     * Null for legacy cases.
+     */
+    private final Category category;
+
+    /**
+     * Verification difficulty level — enables the AI Mentor to calibrate
+     * the depth and complexity of its questions. Null for legacy cases
+     * (defaults to MEDIUM).
+     */
+    private final VerificationDifficulty verificationDifficulty;
 
     // ----------------------------------------------------------------
     // Lifecycle metadata

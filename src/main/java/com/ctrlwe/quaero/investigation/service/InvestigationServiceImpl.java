@@ -1,7 +1,7 @@
 package com.ctrlwe.quaero.investigation.service;
 
 import com.ctrlwe.quaero.ai.dto.AiPromptResult;
-import com.ctrlwe.quaero.ai.exception.AiServiceException;
+import com.ctrlwe.quaero.ai.dto.AiRequest;
 import com.ctrlwe.quaero.ai.service.AiClientService;
 import com.ctrlwe.quaero.ai.util.PromptBuilder;
 import com.ctrlwe.quaero.casemodule.dto.CaseInternalContext;
@@ -23,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * Default implementation of {@link InvestigationService}.
@@ -41,16 +40,15 @@ import java.util.stream.Collectors;
  *   <li>Real fallback prompt library — belongs in {@code ai/}, not here.</li>
  * </ul>
  *
- * <h3>PromptBuilder usage — known limitation</h3>
- * <p>{@link PromptBuilder#buildSocraticPrompt(String)} (the only Socratic
- * method available in Vishwa's current utility) accepts a single
- * {@code String userPrompt}. It does NOT accept separate parameters for
- * case context or conversation history. To work within this constraint
- * without modifying {@code ai/}, this implementation assembles a
- * context-enriched composite string <em>before</em> calling
- * {@code buildSocraticPrompt}. The composite string includes the case
- * claim, investigation hints, and the prior conversation — all formatted
- * as a single block that the method will embed in its system preamble.</p>
+ * <h3>PromptBuilder usage — 3-layer architecture</h3>
+ * <p>{@link PromptBuilder#buildSocraticRequest} builds a fully-formed
+ * {@link AiRequest} with Gemini's native {@code system_instruction}
+ * field, a case context block as the first {@code user} message, and
+ * the conversation history as alternating {@code user}/{@code model}
+ * turns in the {@code contents[]} array. This method maps the
+ * Investigation module's {@link ConversationTurn} entities to
+ * {@link PromptBuilder.TurnEntry} records to keep PromptBuilder
+ * decoupled from Investigation entities.</p>
  *
  * <p><strong>Ground truth isolation:</strong> Only {@code claim} and
  * {@code investigationHints} from {@link CaseInternalContext} are included
@@ -207,12 +205,25 @@ public class InvestigationServiceImpl implements InvestigationService {
         List<ConversationTurn> history =
                 turnRepository.findBySessionIdOrderByCreatedAt(session.getId());
 
-        // 7. Assemble the prompt.
-        String assembledInput = buildContextEnrichedInput(caseContext, history);
-        String fullPrompt = PromptBuilder.buildSocraticPrompt(assembledInput);
+        // 7. Build the multi-turn AI request via PromptBuilder.
+        List<PromptBuilder.TurnEntry> turnEntries = toTurnEntries(history);
+        String categoryName = caseContext.getCategory() != null
+                ? caseContext.getCategory().name() : null;
+        String difficultyName = caseContext.getVerificationDifficulty() != null
+                ? caseContext.getVerificationDifficulty().name() : null;
+
+        AiRequest aiRequest = PromptBuilder.buildSocraticRequest(
+                caseContext.getClaim(),
+                caseContext.getInvestigationHints(),
+                categoryName,
+                difficultyName,
+                turnEntries,
+                session.getTurnCount() + 1,  // 1-indexed current turn
+                MAX_TURNS
+        );
 
         // 8. Call the AI Mentor (never throws — returns AiPromptResult).
-        AiPromptResult result = callAi(fullPrompt, session.getId());
+        AiPromptResult result = callAi(aiRequest, session.getId());
         String aiReply = result.responseText();
 
         // 9. Persist the AI reply.
@@ -260,53 +271,21 @@ public class InvestigationServiceImpl implements InvestigationService {
     // ----------------------------------------------------------------
 
     /**
-     * Assembles the context-enriched input string that is passed to
-     * {@link PromptBuilder#buildSocraticPrompt(String)}.
+     * Maps the Investigation module's {@link ConversationTurn} entities
+     * to {@link PromptBuilder.TurnEntry} records.
      *
-     * <p>Because {@code buildSocraticPrompt} accepts only a single string
-     * (it has no parameters for case context or conversation history), this
-     * method formats the case claim, investigation hints, and conversation
-     * history into a single structured text block. That block is then
-     * treated by the method as the "user's input" within its Socratic
-     * system preamble.</p>
+     * <p>This conversion decouples PromptBuilder from Investigation's
+     * entity model. The sender is mapped as the string "USER" or "AI"
+     * matching {@link TurnSender#name()}.</p>
      *
-     * <p><strong>Ground truth isolation:</strong> This method references
-     * only {@code caseContext.getClaim()} and
-     * {@code caseContext.getInvestigationHints()}.
-     * It must NEVER reference {@code groundTruth}, {@code groundTruthExplanation},
-     * {@code trustedReferences}, or {@code learningSummary}.</p>
-     *
-     * @param caseContext the internal case context (claim + hints used; all
-     *                    other internal fields deliberately excluded)
-     * @param history     the ordered conversation history for this session
-     * @return the assembled string ready to pass to {@code buildSocraticPrompt}
+     * @param history the ordered conversation turns for this session
+     * @return a list of turn entries suitable for PromptBuilder
      */
-    private String buildContextEnrichedInput(CaseInternalContext caseContext,
-                                             List<ConversationTurn> history) {
-        // Build the conversation history block.
-        String conversationBlock;
-        if (history.isEmpty()) {
-            conversationBlock = "(No prior conversation — this is the first message.)";
-        } else {
-            conversationBlock = history.stream()
-                    .map(turn -> turn.getSender().name() + ": " + turn.getContent())
-                    .collect(Collectors.joining("\n"));
-        }
-
-        return """
-                --- Case under investigation ---
-                Claim: %s
-
-                --- Guidance notes (use these to shape your questions; do not reveal them verbatim) ---
-                %s
-
-                --- Conversation so far ---
-                %s
-                """.formatted(
-                caseContext.getClaim(),
-                caseContext.getInvestigationHints(),
-                conversationBlock
-        );
+    private List<PromptBuilder.TurnEntry> toTurnEntries(List<ConversationTurn> history) {
+        return history.stream()
+                .map(turn -> new PromptBuilder.TurnEntry(
+                        turn.getSender().name(), turn.getContent()))
+                .toList();
     }
 
     /**
@@ -316,12 +295,12 @@ public class InvestigationServiceImpl implements InvestigationService {
      * as {@code degraded=true} results by {@link com.ctrlwe.quaero.ai.service.GeminiAiClientService}.
      * This method simply logs the degraded flag for observability.</p>
      *
-     * @param fullPrompt the assembled prompt string
-     * @param sessionId  the current session ID (for log context only)
+     * @param request   the multi-turn AI request built by PromptBuilder
+     * @param sessionId the current session ID (for log context only)
      * @return the AI reply as an {@link AiPromptResult}, never {@code null}
      */
-    private AiPromptResult callAi(String fullPrompt, Long sessionId) {
-        AiPromptResult result = aiClientService.getSocraticResponse(fullPrompt);
+    private AiPromptResult callAi(AiRequest request, Long sessionId) {
+        AiPromptResult result = aiClientService.getSocraticResponse(request);
         if (result.degraded()) {
             log.warn("Degraded AI response for sessionId={} — fallback text returned", sessionId);
         }
