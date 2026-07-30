@@ -65,15 +65,18 @@ public class GeminiAiClientService implements AiClientService {
     /**
      * {@inheritDoc}
      *
-     * <p>Sends the prompt to Gemini and wraps the response in an
+     * <p>Sends the multi-turn request (with system instruction and
+     * conversation history) to Gemini and wraps the response in an
      * {@link AiPromptResult}. Returns {@code degraded=true} if Gemini
      * is unreachable or returns a blank/malformed response.</p>
      */
     @Override
-    public AiPromptResult getSocraticResponse(String prompt) {
-        log.debug("Generating Socratic response");
+    public AiPromptResult getSocraticResponse(AiRequest request) {
+        log.debug("Generating Socratic response (multi-turn, {} content messages)",
+                request.contents() != null ? request.contents().size() : 0);
         try {
-            String text = executeGeneration(prompt);
+            AiResponse response = geminiHttpClient.generate(request);
+            String text = response.extractText();
             if (text == null || text.isBlank()) {
                 log.warn("Gemini returned blank Socratic response; returning degraded result");
                 return AiPromptResult.degraded(SOCRATIC_FALLBACK);
@@ -99,7 +102,9 @@ public class GeminiAiClientService implements AiClientService {
         log.debug("Generating grading result");
         try {
             String prompt = PromptBuilder.buildGradingPrompt(rationale, evidenceLinks, caseContext);
-            String text = executeGeneration(prompt);
+            AiRequest request = AiRequest.of(prompt);
+            AiResponse response = geminiHttpClient.generate(request);
+            String text = response.extractText();
             if (text == null || text.isBlank()) {
                 log.warn("Gemini returned blank grading response; returning degraded result");
                 return GradingResult.ofDegraded();
@@ -114,20 +119,6 @@ public class GeminiAiClientService implements AiClientService {
     // ------------------------------------------------------------------
     // Private helpers
     // ------------------------------------------------------------------
-
-    /**
-     * Executes a single generation call and returns the raw text.
-     *
-     * @param prompt the fully-formed prompt string
-     * @return the first candidate's text, or an empty string if the
-     *         response structure is empty
-     * @throws AiServiceException if the HTTP call to Gemini fails
-     */
-    private String executeGeneration(String prompt) {
-        AiRequest request = AiRequest.of(prompt);
-        AiResponse response = geminiHttpClient.generate(request);
-        return response.extractText();
-    }
 
     /**
      * Parses the AI's grading narrative into a {@link GradingResult}.

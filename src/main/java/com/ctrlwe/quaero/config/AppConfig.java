@@ -1,5 +1,6 @@
 package com.ctrlwe.quaero.config;
 
+import org.springframework.boot.flyway.autoconfigure.FlywayMigrationStrategy;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
@@ -39,6 +40,19 @@ public class AppConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    /**
+     * Custom Flyway migration strategy that automatically executes 'repair'
+     * before running migrations. This helps recover from failed migrations
+     * automatically in development environments.
+     */
+    @Bean
+    public FlywayMigrationStrategy flywayMigrationStrategy() {
+        return flyway -> {
+            flyway.repair();
+            flyway.migrate();
+        };
     }
 
     // ---------------------------------------------------------------

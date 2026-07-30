@@ -232,6 +232,9 @@ public class CaseServiceImpl implements CaseService {
                 .trustedReferences(c.getTrustedReferences())
                 .investigationHints(c.getInvestigationHints())
                 .learningSummary(c.getLearningSummary())
+                // Presentation subset — only what the AI Mentor needs
+                .category(c.getCategory())
+                .verificationDifficulty(c.getVerificationDifficulty())
                 .status(c.getStatus())
                 .createdAt(c.getCreatedAt())
                 .build();

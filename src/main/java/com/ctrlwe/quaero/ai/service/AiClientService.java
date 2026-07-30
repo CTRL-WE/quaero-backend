@@ -1,6 +1,7 @@
 package com.ctrlwe.quaero.ai.service;
 
 import com.ctrlwe.quaero.ai.dto.AiPromptResult;
+import com.ctrlwe.quaero.ai.dto.AiRequest;
 import com.ctrlwe.quaero.ai.dto.GradingResult;
 
 import java.util.List;
@@ -11,7 +12,7 @@ import java.util.List;
  *
  * <p>Exposes exactly two public methods:</p>
  * <ol>
- *   <li>{@link #getSocraticResponse(String)} — used by the
+ *   <li>{@link #getSocraticResponse(AiRequest)} — used by the
  *       Investigation module to power the AI Mentor dialogue.</li>
  *   <li>{@link #getGradingResult(String, List, String)} — used by the
  *       Submission &amp; Evaluation module to score a user's verdict.</li>
@@ -22,9 +23,11 @@ import java.util.List;
  * from this interface — all AI provider failures are absorbed here and
  * returned as degraded results.</p>
  *
- * <p>Prompt engineering must be done via
+ * <p>Prompt engineering is handled by
  * {@link com.ctrlwe.quaero.ai.util.PromptBuilder} before calling
- * these methods; the interface accepts pre-built prompt strings.</p>
+ * these methods. The Socratic method accepts a pre-built
+ * {@link AiRequest} (with system instruction and multi-turn contents);
+ * the grading method accepts raw strings.</p>
  *
  * @author Quaero Engineering
  * @since 1.0
@@ -32,16 +35,23 @@ import java.util.List;
 public interface AiClientService {
 
     /**
-     * Generates a Socratic-style response to the given prompt.
+     * Generates a Socratic-style response using the given multi-turn
+     * request structure.
+     *
+     * <p>The request includes Gemini's native {@code system_instruction}
+     * and a {@code contents[]} array with alternating user/model roles,
+     * enabling the model to maintain conversational context and
+     * persistent behavioral rules.</p>
      *
      * <p>Never throws. Returns a degraded {@link AiPromptResult}
      * (with {@code degraded=true} and a safe placeholder text) if
      * the AI provider is unavailable or returns a blank response.</p>
      *
-     * @param prompt the fully-formed Socratic prompt
+     * @param request the fully-formed {@link AiRequest} built by
+     *                {@link com.ctrlwe.quaero.ai.util.PromptBuilder#buildSocraticRequest}
      * @return an {@link AiPromptResult} — never {@code null}
      */
-    AiPromptResult getSocraticResponse(String prompt);
+    AiPromptResult getSocraticResponse(AiRequest request);
 
     /**
      * Grades a user's submission against the case evidence.
