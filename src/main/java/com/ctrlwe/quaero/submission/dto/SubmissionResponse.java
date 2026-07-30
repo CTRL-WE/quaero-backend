@@ -4,11 +4,13 @@ import com.ctrlwe.quaero.submission.entity.ConfidenceLevel;
 import com.ctrlwe.quaero.submission.entity.EvidenceType;
 import com.ctrlwe.quaero.submission.entity.SubmissionStatus;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -92,4 +94,29 @@ public class SubmissionResponse {
      * Timestamp of the most recent modification to this submission.
      */
     private LocalDateTime updatedAt;
+
+    // ── Progression feedback fields (populated on creation only) ─────────────
+
+    /**
+     * XP earned specifically for this submission.
+     *
+     * <p>Populated by the reputation system when the submission is first
+     * created. {@code null} on subsequent reads of an existing submission
+     * (e.g. GET /api/submissions/{id}) because XP is a creation-time
+     * side-effect, not a persistent field on the submission itself.</p>
+     */
+    @Schema(description = "XP earned for this submission (populated on creation only).",
+            example = "42", nullable = true)
+    private Integer xpEarned;
+
+    /**
+     * The user's updated credibility score after this submission.
+     *
+     * <p>Populated by the reputation system when the submission is first
+     * created. {@code null} on subsequent reads.</p>
+     */
+    @Schema(description = "User's updated credibility after this submission " +
+            "(populated on creation only).",
+            example = "74.5000", nullable = true)
+    private BigDecimal updatedCredibility;
 }

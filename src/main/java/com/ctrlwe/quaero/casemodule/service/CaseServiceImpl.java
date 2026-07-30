@@ -7,6 +7,7 @@ import com.ctrlwe.quaero.casemodule.entity.Case;
 import com.ctrlwe.quaero.casemodule.entity.CaseStatus;
 import com.ctrlwe.quaero.casemodule.exception.CaseNotFoundException;
 import com.ctrlwe.quaero.casemodule.repository.CaseRepository;
+import com.ctrlwe.quaero.submission.service.SubmissionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -49,6 +50,14 @@ public class CaseServiceImpl implements CaseService {
 
     private final CaseRepository caseRepository;
 
+    /**
+     * Cross-module dependency — accessed through its service interface only.
+     * Used exclusively to power the {@code alreadyCompleted} flag on
+     * {@link CaseFeedItem} via {@link SubmissionService#hasSubmittedForCase}.
+     * No Submission entity or repository is referenced directly.
+     */
+    private final SubmissionService submissionService;
+
     // ----------------------------------------------------------------
     // Public surface — wired to HTTP endpoints in CaseController
     // ----------------------------------------------------------------
@@ -61,9 +70,9 @@ public class CaseServiceImpl implements CaseService {
      * returns the resulting list. The Feed represents the Investigation
      * Feed in the product — a scrollable list of Investigation Challenges.</p>
      *
-     * <p>The {@code alreadyCompleted} flag is stubbed as {@code false} for
-     * every case. See the TODO inside {@link #toFeedItem(Case, Long)} for the
-     * Submission module wiring instructions.</p>
+     * <p>The {@code alreadyCompleted} flag is populated for each case by
+     * delegating to {@link com.ctrlwe.quaero.submission.service.SubmissionService#hasSubmittedForCase}
+     * — any existing submission (regardless of status) marks a case as completed.</p>
      */
     @Override
     @Transactional(readOnly = true)
@@ -147,14 +156,7 @@ public class CaseServiceImpl implements CaseService {
      * @return a populated {@link CaseFeedItem}
      */
     private CaseFeedItem toFeedItem(Case c, Long userId) {
-        // TODO: Replace the alreadyCompleted stub with a real call to
-        //       SubmissionService. The Submission module now exists —
-        //       inject SubmissionService into this class through its
-        //       interface and check whether a submission exists for
-        //       (userId, c.getId()). Never reach into SubmissionRepository
-        //       directly. The userId parameter is already threaded through
-        //       from the controller, so no signature change will be needed.
-        boolean alreadyCompleted = false;
+        boolean alreadyCompleted = submissionService.hasSubmittedForCase(userId, c.getId());
 
         return CaseFeedItem.builder()
                 .id(c.getId())

@@ -109,4 +109,22 @@ public interface SubmissionService {
      *         if the requesting user is not the submission owner
      */
     void deleteSubmission(Long submissionId, Long userId);
+
+    /**
+     * Returns {@code true} if the given user has at least one submission
+     * for the given case, regardless of the submission's lifecycle status.
+     *
+     * <p>This is a lightweight existence check — no submission entity is
+     * loaded. It is called by the Case module's feed endpoint to populate
+     * the {@code alreadyCompleted} flag on each
+     * {@link com.ctrlwe.quaero.casemodule.dto.CaseFeedItem}. Callers
+     * must <strong>not</strong> reach into the Submission repository or
+     * entity directly — this method is the only permitted cross-module
+     * access point for this check.</p>
+     *
+     * @param userId the ID of the user to check
+     * @param caseId the ID of the case to check
+     * @return {@code true} if a submission exists for {@code (userId, caseId)}
+     */
+    boolean hasSubmittedForCase(Long userId, Long caseId);
 }

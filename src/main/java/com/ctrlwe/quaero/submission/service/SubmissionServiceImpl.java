@@ -1,10 +1,16 @@
 package com.ctrlwe.quaero.submission.service;
 
+import com.ctrlwe.quaero.ai.dto.GradingResult;
+import com.ctrlwe.quaero.ai.service.AiClientService;
+import com.ctrlwe.quaero.casemodule.dto.CaseInternalContext;
 import com.ctrlwe.quaero.casemodule.exception.CaseNotFoundException;
 import com.ctrlwe.quaero.casemodule.repository.CaseRepository;
+import com.ctrlwe.quaero.casemodule.service.CaseService;
 import com.ctrlwe.quaero.exception.ErrorCode;
 import com.ctrlwe.quaero.exception.ResourceNotFoundException;
 import com.ctrlwe.quaero.exception.UnauthorizedException;
+import com.ctrlwe.quaero.reputation.dto.ProgressionUpdateResult;
+import com.ctrlwe.quaero.reputation.service.ReputationService;
 import com.ctrlwe.quaero.submission.dto.CreateSubmissionRequest;
 import com.ctrlwe.quaero.submission.dto.SubmissionResponse;
 import com.ctrlwe.quaero.submission.dto.SubmissionSummaryResponse;
@@ -20,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -56,8 +63,11 @@ public class SubmissionServiceImpl implements SubmissionService {
     private final SubmissionRepository submissionRepository;
     private final UserRepository userRepository;
     private final CaseRepository caseRepository;
+    private final CaseService caseService;
+    private final AiClientService aiClientService;
     private final SubmissionMapper submissionMapper;
     private final SubmissionValidator submissionValidator;
+    private final ReputationService reputationService;
 
     /**
      * {@inheritDoc}
@@ -92,7 +102,38 @@ public class SubmissionServiceImpl implements SubmissionService {
         log.info("Submission created successfully: id={}, caseId={}, userId={}",
                 savedSubmission.getId(), caseId, userId);
 
-        return submissionMapper.toResponse(savedSubmission);
+        // ── AI grading ────────────────────────────────────────────────────────────────────
+        // Fetch the full case context (ground truth + claim) required by the grading prompt.
+        // CaseService.getFullContext() never returns null and propagates CaseNotFoundException
+        // if the case has been deleted between the existsById check above and this call
+        // (an unlikely but safe failure path — the transaction rolls back).
+        CaseInternalContext caseContext = caseService.getFullContext(caseId);
+
+        // Build the evidence list. sourceUrl may be null/blank; include it only when present.
+        List<String> evidenceLinks = (request.getSourceUrl() != null && !request.getSourceUrl().isBlank())
+                ? Collections.singletonList(request.getSourceUrl())
+                : Collections.emptyList();
+
+        // Grade the submission. Never throws — returns GradingResult.ofDegraded() on any
+        // AI failure, giving score=0 and degraded=true. This matches the pattern used by
+        // InvestigationServiceImpl.callAi() for Socratic responses.
+        GradingResult gradingResult = aiClientService.getGradingResult(
+                request.getDescription(),
+                evidenceLinks,
+                caseContext.getClaim() + "\n" + caseContext.getGroundTruth());
+
+        if (gradingResult.degraded()) {
+            log.warn("Degraded AI grading result for submissionId={} (userId={}, caseId={}) "
+                    + "— score defaults to 0",
+                    savedSubmission.getId(), userId, caseId);
+        }
+
+        // ── Reputation integration: joins this @Transactional context ─────────────────────
+        int reasoningScore = gradingResult.score();
+        ProgressionUpdateResult progression =
+                reputationService.recordSubmissionOutcome(userId, reasoningScore);
+
+        return submissionMapper.toCreationResponse(savedSubmission, progression);
     }
 
     /**
@@ -210,5 +251,20 @@ public class SubmissionServiceImpl implements SubmissionService {
                             + submission.getId(),
                     ErrorCode.UNAUTHORIZED);
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Delegates to a lightweight repository {@code SELECT EXISTS} query.
+     * No entity is loaded. This method intentionally carries no
+     * {@code @Transactional} annotation — it can safely run without a
+     * transaction or join an existing one via Spring's default
+     * {@code REQUIRED} propagation.</p>
+     */
+    @Override
+    public boolean hasSubmittedForCase(Long userId, Long caseId) {
+        log.debug("hasSubmittedForCase called for userId={}, caseId={}", userId, caseId);
+        return submissionRepository.existsByUserIdAndCaseId(userId, caseId);
     }
 }

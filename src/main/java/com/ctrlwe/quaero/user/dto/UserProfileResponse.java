@@ -1,12 +1,15 @@
 package com.ctrlwe.quaero.user.dto;
 
+import com.ctrlwe.quaero.reputation.RankTier;
 import com.ctrlwe.quaero.user.AccountStatus;
 import com.ctrlwe.quaero.user.Role;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -20,7 +23,7 @@ import java.time.LocalDateTime;
  * @since 1.0
  */
 @Getter
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserProfileResponse {
@@ -57,4 +60,45 @@ public class UserProfileResponse {
 
     /** Timestamp of the most recent profile update. */
     private LocalDateTime updatedAt;
+
+    // ── Reputation & Progression fields (composed in by UserController) ──────────
+
+    /**
+     * Total XP accumulated across all accepted submissions.
+     * {@code 0} until the first submission. Managed by ReputationService.
+     */
+    @Schema(description = "Total XP accumulated by the user.", example = "340")
+    private int totalXp;
+
+    /**
+     * Running arithmetic mean of all accepted reasoning scores.
+     * {@code null} until the user's first accepted submission.
+     */
+    @Schema(description = "Running credibility score (mean of reasoning scores). " +
+            "Null until first submission.", example = "74.5000", nullable = true)
+    private BigDecimal credibility;
+
+    /** Number of investigation sessions completed. */
+    @Schema(description = "Number of completed investigation sessions.", example = "5")
+    private int completedInvestigations;
+
+    /** Number of accepted (successful) submissions. */
+    @Schema(description = "Number of successful submissions.", example = "5")
+    private int successfulSubmissions;
+
+    /**
+     * Cosmetic rank tier derived from {@link #totalXp} at read time.
+     * Never stored in the database.
+     */
+    @Schema(description = "Cosmetic rank tier derived from XP (never persisted).",
+            example = "Analyst")
+    private RankTier rankTier;
+
+    /**
+     * 1-indexed position in the leaderboard (credibility DESC, XP DESC).
+     * Deliberately named {@code leaderboardPosition} to avoid confusion with
+     * the cosmetic {@link #rankTier}.
+     */
+    @Schema(description = "1-indexed leaderboard position.", example = "3")
+    private int leaderboardPosition;
 }

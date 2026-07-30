@@ -1,8 +1,10 @@
 package com.ctrlwe.quaero.user;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -56,4 +58,16 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * @return {@code true} if a user with this username exists
      */
     boolean existsByUsername(String username);
+
+    /**
+     * Returns all users ordered by credibility DESC (NULLS LAST), then total XP DESC.
+     *
+     * <p>NULLS LAST ensures users with no credibility (no accepted submissions yet)
+     * sort below those who have a credibility value, which is the correct business
+     * behaviour for leaderboard display.</p>
+     *
+     * @return all User entities in the prescribed order
+     */
+    @Query("SELECT u FROM User u ORDER BY u.credibility DESC NULLS LAST, u.totalXp DESC")
+    List<User> findAllOrderByCredibilityDescTotalXpDesc();
 }

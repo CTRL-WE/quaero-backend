@@ -100,19 +100,14 @@ public class CaseFeedItem {
      *
      * <p>Completed cases are still shown on the Feed (they are never hidden),
      * but this flag allows the frontend to render a visual indicator
-     * (e.g. a checkmark) so the user knows they have already investigated it.</p>
-     *
-     * <!-- TODO: Wire to Submission module.
-     *      The Submission module now exists. Replace this stub with a call to
-     *      SubmissionService (through its service interface) checking whether
-     *      the user has an existing submission for this case.
-     *      The method signature getFeed(Long userId) already receives userId
-     *      so no CaseController changes are needed at that point. -->
+     * (e.g. a checkmark) so the user knows they have already investigated it.
+     * The value is derived from {@code SubmissionService.hasSubmittedForCase}
+     * — any submission status (PENDING, VERIFIED, REJECTED) counts as
+     * completed for the purposes of this flag.</p>
      */
     @Schema(
-        description = "True if the authenticated user has already submitted a " +
-                      "reasoning verdict for this Investigation Challenge. " +
-                      "Always false until the Submission module is wired in.",
+        description = "True if the authenticated user has at least one submission " +
+                      "for this Investigation Challenge, regardless of submission status.",
         example = "false",
         requiredMode = Schema.RequiredMode.REQUIRED
     )

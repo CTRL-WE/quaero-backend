@@ -4,6 +4,8 @@ import com.ctrlwe.quaero.user.dto.CreateUserRequest;
 import com.ctrlwe.quaero.user.dto.UpdateProfileRequest;
 import com.ctrlwe.quaero.user.dto.UserProfileResponse;
 
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -85,4 +87,47 @@ public interface UserService {
      *         if found, or empty if no user has the given username
      */
     Optional<UserProfileResponse> findByUsername(String username);
+
+    /**
+     * Returns all users ordered by credibility DESC, then total XP DESC.
+     *
+     * <p>This is the canonical ordering method for both the Leaderboard
+     * endpoint and the leaderboard-position lookup inside Profile.
+     * No XP or credibility calculation is performed here — the fields
+     * are simply read from the database as-is.</p>
+     *
+     * <p>Users whose {@code credibility} is {@code null} (no submissions yet)
+     * are sorted below all users who have a credibility value, consistent
+     * with SQL {@code ORDER BY credibility DESC NULLS LAST, total_xp DESC}.</p>
+     *
+     * @return the full ordered list of users; never {@code null}, may be empty
+     */
+    List<User> getUsersOrderedByProgression();
+
+    /**
+     * Persists updated progression fields for a user.
+     *
+     * <p>This is the <strong>only</strong> write path for XP and credibility.
+     * All calculation is performed externally by
+     * {@link com.ctrlwe.quaero.reputation.ReputationCalculator} before
+     * this method is called; no math is performed here.</p>
+     *
+     * <p>Designed for use by
+     * {@link com.ctrlwe.quaero.reputation.service.ReputationService} only.
+     * No other module or service may call this method to modify XP or
+     * credibility.</p>
+     *
+     * @param userId                 the ID of the user whose progression to update
+     * @param newTotalXp             the new cumulative XP total
+     * @param newCredibility         the new credibility value
+     * @param newCompletedInvestigations the new completed-investigation count
+     * @param newSuccessfulSubmissions   the new successful-submission count
+     * @throws com.ctrlwe.quaero.exception.ResourceNotFoundException
+     *         if no user with the given ID exists
+     */
+    void updateProgressionFields(Long userId,
+                                 int newTotalXp,
+                                 BigDecimal newCredibility,
+                                 int newCompletedInvestigations,
+                                 int newSuccessfulSubmissions);
 }

@@ -45,4 +45,19 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
      * @return a list of submissions matching the given status
      */
     List<Submission> findByStatus(SubmissionStatus status);
+
+    /**
+     * Returns {@code true} if a submission created by the given user
+     * for the given case exists, regardless of its lifecycle status.
+     *
+     * <p>This is used exclusively by the Case module's feed endpoint to
+     * populate the {@code alreadyCompleted} flag on each
+     * {@link com.ctrlwe.quaero.casemodule.dto.CaseFeedItem}. It performs
+     * a lightweight {@code SELECT EXISTS} query — no entity is loaded.</p>
+     *
+     * @param userId the ID of the user to check
+     * @param caseId the ID of the case to check
+     * @return {@code true} if at least one submission exists for the pair
+     */
+    boolean existsByUserIdAndCaseId(Long userId, Long caseId);
 }

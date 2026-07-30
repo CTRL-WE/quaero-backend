@@ -38,8 +38,9 @@ public interface CaseService {
      *
      * <p>Draft cases are excluded. The evidence teaser is truncated to
      * 150 characters with {@code "..."} appended if the original is longer.
-     * The {@code alreadyCompleted} flag is stubbed as {@code false} until
-     * the Submission module is built and wired.</p>
+     * The {@code alreadyCompleted} flag is populated by delegating to
+     * {@link com.ctrlwe.quaero.submission.service.SubmissionService#hasSubmittedForCase}
+     * — any submission (regardless of status) marks the case as completed.</p>
      *
      * @param userId the ID of the currently authenticated user (used for
      *               the per-user completion status check)

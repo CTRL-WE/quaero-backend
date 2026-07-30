@@ -1,5 +1,6 @@
 package com.ctrlwe.quaero.user;
 
+import com.ctrlwe.quaero.reputation.dto.ProfileStatistics;
 import com.ctrlwe.quaero.user.dto.CreateUserRequest;
 import com.ctrlwe.quaero.user.dto.UserProfileResponse;
 import com.ctrlwe.quaero.user.dto.UserSummaryResponse;
@@ -45,6 +46,50 @@ public class UserMapper {
                 .reputationScore(user.getReputationScore())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
+                // Progression fields persisted on the entity:
+                .totalXp(user.getTotalXp())
+                .credibility(user.getCredibility())
+                .completedInvestigations(user.getCompletedInvestigations())
+                .successfulSubmissions(user.getSuccessfulSubmissions())
+                // rankTier and leaderboardPosition require a full user-list scan;
+                // they are populated by toProfileResponseWithStats() when requested
+                // from the profile endpoint.
+                .build();
+    }
+
+    /**
+     * Maps a {@link User} entity to a {@link UserProfileResponse}, enriched with
+     * the two computed fields ({@code rankTier}, {@code leaderboardPosition}) that
+     * cannot be derived from the entity alone.
+     *
+     * <p>Called exclusively from {@link com.ctrlwe.quaero.user.UserController#getMyProfile()}
+     * where the controller also calls
+     * {@link com.ctrlwe.quaero.reputation.service.ReputationService#getProfileStatistics(Long)}
+     * and passes the result here.
+     *
+     * @param user  the user entity
+     * @param stats the profile statistics (rank tier + leaderboard position)
+     * @return a fully populated {@link UserProfileResponse} including all 6 new fields
+     */
+    public UserProfileResponse toProfileResponseWithStats(User user, ProfileStatistics stats) {
+        return UserProfileResponse.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .fullName(user.getFullName())
+                .profilePictureUrl(user.getProfilePictureUrl())
+                .bio(user.getBio())
+                .role(user.getRole())
+                .accountStatus(user.getAccountStatus())
+                .reputationScore(user.getReputationScore())
+                .createdAt(user.getCreatedAt())
+                .updatedAt(user.getUpdatedAt())
+                .totalXp(stats.getTotalXp())
+                .credibility(stats.getCredibility())
+                .completedInvestigations(stats.getCompletedInvestigations())
+                .successfulSubmissions(stats.getSuccessfulSubmissions())
+                .rankTier(stats.getRankTier())
+                .leaderboardPosition(stats.getLeaderboardPosition())
                 .build();
     }
 

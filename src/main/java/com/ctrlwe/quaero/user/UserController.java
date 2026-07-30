@@ -2,6 +2,8 @@ package com.ctrlwe.quaero.user;
 
 import com.ctrlwe.quaero.common.response.ApiErrorResponse;
 import com.ctrlwe.quaero.common.response.ApiResponse;
+import com.ctrlwe.quaero.reputation.dto.ProfileStatistics;
+import com.ctrlwe.quaero.reputation.service.ReputationService;
 import com.ctrlwe.quaero.user.dto.UpdateProfileRequest;
 import com.ctrlwe.quaero.user.dto.UserProfileResponse;
 import com.ctrlwe.quaero.security.CurrentUserResolver;
@@ -54,6 +56,7 @@ public class UserController {
 
     private final UserService userService;
     private final CurrentUserResolver currentUserResolver;
+    private final ReputationService reputationService;
 
     /**
      * Returns the authenticated user's full profile.
@@ -69,7 +72,9 @@ public class UserController {
         summary = "Get current user profile",
         description = "Returns the full profile of the currently authenticated user, " +
                       "including username, email, full name, bio, profile picture URL, " +
-                      "role, account status, reputation score, and timestamps."
+                      "role, account status, reputation score, timestamps, and all six " +
+                      "progression fields: totalXp, credibility, completedInvestigations, " +
+                      "successfulSubmissions, rankTier, and leaderboardPosition."
     )
     @ApiResponses(value = {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -101,7 +106,18 @@ public class UserController {
         Long userId = resolveCurrentUserId();
         log.debug("GET /api/users/me — userId={}", userId);
 
-        UserProfileResponse profile = userService.getProfile(userId);
+        // Base profile (includes 4 persisted progression fields via UserMapper).
+        UserProfileResponse baseProfile = userService.getProfile(userId);
+
+        // Computed progression fields (rankTier, leaderboardPosition) require a
+        // full user-list scan and are obtained from ReputationService.
+        ProfileStatistics stats = reputationService.getProfileStatistics(userId);
+
+        // Overlay the two computed fields onto the base profile using toBuilder().
+        UserProfileResponse profile = baseProfile.toBuilder()
+                .rankTier(stats.getRankTier())
+                .leaderboardPosition(stats.getLeaderboardPosition())
+                .build();
 
         return ResponseEntity.ok(
                 ApiResponse.success(profile, "Profile retrieved successfully"));

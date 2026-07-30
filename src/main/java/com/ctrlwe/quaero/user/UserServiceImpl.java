@@ -11,6 +11,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -140,5 +142,53 @@ public class UserServiceImpl implements UserService {
 
         return userRepository.findByUsername(username)
                 .map(userMapper::toProfileResponse);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Delegates directly to the repository's JPQL ordering query.
+     * No calculation is performed here.</p>
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<User> getUsersOrderedByProgression() {
+        log.debug("getUsersOrderedByProgression called");
+        return userRepository.findAllOrderByCredibilityDescTotalXpDesc();
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Loads the entity, overwrites only the four progression fields,
+     * and persists. The existing {@code @LastModifiedDate updatedAt}
+     * column is refreshed automatically by JPA auditing on save.
+     * No XP/credibility arithmetic is performed here.</p>
+     */
+    @Override
+    @Transactional
+    public void updateProgressionFields(Long userId,
+                                        int newTotalXp,
+                                        BigDecimal newCredibility,
+                                        int newCompletedInvestigations,
+                                        int newSuccessfulSubmissions) {
+        log.debug("updateProgressionFields called for userId={}, newTotalXp={}, " +
+                "newCredibility={}, completedInvestigations={}, successfulSubmissions={}",
+                userId, newTotalXp, newCredibility,
+                newCompletedInvestigations, newSuccessfulSubmissions);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User with id " + userId + " does not exist",
+                        ErrorCode.RESOURCE_NOT_FOUND));
+
+        user.setTotalXp(newTotalXp);
+        user.setCredibility(newCredibility);
+        user.setCompletedInvestigations(newCompletedInvestigations);
+        user.setSuccessfulSubmissions(newSuccessfulSubmissions);
+
+        userRepository.save(user);
+        log.info("Progression updated for userId={}: totalXp={}, credibility={}",
+                userId, newTotalXp, newCredibility);
     }
 }

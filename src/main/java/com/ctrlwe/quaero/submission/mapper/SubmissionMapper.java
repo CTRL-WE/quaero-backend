@@ -1,5 +1,6 @@
 package com.ctrlwe.quaero.submission.mapper;
 
+import com.ctrlwe.quaero.reputation.dto.ProgressionUpdateResult;
 import com.ctrlwe.quaero.submission.dto.CreateSubmissionRequest;
 import com.ctrlwe.quaero.submission.dto.SubmissionResponse;
 import com.ctrlwe.quaero.submission.dto.SubmissionSummaryResponse;
@@ -81,6 +82,40 @@ public class SubmissionMapper {
                 .status(submission.getStatus())
                 .createdAt(submission.getCreatedAt())
                 .updatedAt(submission.getUpdatedAt())
+                .build();
+    }
+
+    /**
+     * Maps a {@link Submission} entity to a full {@link SubmissionResponse} DTO,
+     * enriched with reputation progression feedback from a
+     * {@link ProgressionUpdateResult}.
+     *
+     * <p>Used exclusively on the creation path — the {@link #toResponse(Submission)}
+     * overload (used for GET reads) leaves the progression fields as {@code null}
+     * because XP is a creation-time side-effect, not a persistent field on the
+     * submission entity.</p>
+     *
+     * @param submission  the newly persisted submission entity
+     * @param progression the progression update result from ReputationService
+     * @return a fully populated {@link SubmissionResponse} with progression fields
+     */
+    public SubmissionResponse toCreationResponse(Submission submission,
+                                                  ProgressionUpdateResult progression) {
+        return SubmissionResponse.builder()
+                .id(submission.getId())
+                .caseId(submission.getCaseId())
+                .userId(submission.getUserId())
+                .title(submission.getTitle())
+                .description(submission.getDescription())
+                .sourceName(submission.getSourceName())
+                .sourceUrl(submission.getSourceUrl())
+                .evidenceType(submission.getEvidenceType())
+                .confidenceLevel(submission.getConfidenceLevel())
+                .status(submission.getStatus())
+                .createdAt(submission.getCreatedAt())
+                .updatedAt(submission.getUpdatedAt())
+                .xpEarned(progression.getXpEarned())
+                .updatedCredibility(progression.getUpdatedCredibility())
                 .build();
     }
 

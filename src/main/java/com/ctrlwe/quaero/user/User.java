@@ -18,6 +18,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -122,10 +123,55 @@ public class User {
     /**
      * Cumulative reputation score earned through platform engagement.
      * Starts at zero and increases through successful investigations.
+     *
+     * @deprecated This field is superseded by {@link #totalXp} and
+     * {@link #credibility}, which are managed exclusively by the
+     * {@code ReputationService}. Retained for backward-compatibility
+     * with existing API responses; do not write to it from any new code.
      */
     @Column(nullable = false)
     @Builder.Default
     private int reputationScore = 0;
+
+    // ── Reputation & Progression fields (owned by ReputationService) ──────────
+
+    /**
+     * Total XP accumulated across all accepted submissions.
+     * Defaults to {@code 0}. Written exclusively by
+     * {@link com.ctrlwe.quaero.reputation.service.ReputationService}.
+     */
+    @Column(name = "total_xp", nullable = false)
+    @Builder.Default
+    private int totalXp = 0;
+
+    /**
+     * Running arithmetic mean of all accepted reasoning scores.
+     * {@code null} until the user's first accepted submission.
+     * Written exclusively by
+     * {@link com.ctrlwe.quaero.reputation.service.ReputationService}.
+     */
+    @Column(name = "credibility", precision = 10, scale = 4)
+    private BigDecimal credibility;
+
+    /**
+     * Count of investigation sessions the user has completed.
+     * Incremented by
+     * {@link com.ctrlwe.quaero.reputation.service.ReputationService}
+     * on every accepted submission.
+     */
+    @Column(name = "completed_investigations", nullable = false)
+    @Builder.Default
+    private int completedInvestigations = 0;
+
+    /**
+     * Count of submissions that were accepted (graded) successfully.
+     * Incremented by
+     * {@link com.ctrlwe.quaero.reputation.service.ReputationService}
+     * on every accepted submission.
+     */
+    @Column(name = "successful_submissions", nullable = false)
+    @Builder.Default
+    private int successfulSubmissions = 0;
 
     /**
      * Timestamp at which this user record was created.
